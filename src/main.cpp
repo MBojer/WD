@@ -56,7 +56,7 @@ Ticker MQTT_KeepAlive_Ticker;
 unsigned long MQTT_KeepAlive_Delay = 60000;
 
 const byte MQTT_Subscribe_Topic_Number_Of = 3;
-String MQTT_Subscribe_Topic[MQTT_Subscribe_Topic_Number_Of] = {"/Boat/Settings/" + WiFi_Hostname + "/#", "/Boat/All", "/Boat/Dimmer/" + WiFi_Hostname};
+String MQTT_Subscribe_Topic[MQTT_Subscribe_Topic_Number_Of] = {"/Boat/Settings/" + WiFi_Hostname + "/#", "/Boat/All", "/Boat/Dimmer/" + WiFi_Hostname + "/#"};
 
 #define MQTT_Reconnect_Delay 2 // in secounds
 
@@ -120,8 +120,6 @@ void Dimmer_Fade(byte Selected_Dimmer, byte State_Target) {
 // ############################################################ Dimmer() ############################################################
 void Dimmer(String Topic, String Payload) {
 
-  byte Selected_Dimmer = Payload.substring(0, Payload.indexOf("-")).toInt();
-
   // Topic = /Boat/All
   if (Topic == MQTT_Subscribe_Topic[1]) {
 
@@ -135,18 +133,24 @@ void Dimmer(String Topic, String Payload) {
 
 
   // /Boat/Dimmer/"WiFi_Hostname"
-  if (Topic == MQTT_Subscribe_Topic[2]) {
+  if (Topic.indexOf(MQTT_Subscribe_Topic[2].substring(0, MQTT_Subscribe_Topic[2].indexOf("#"))) != -1 ) {
+
+    String Base_Topic = MQTT_Subscribe_Topic[2].substring(0, MQTT_Subscribe_Topic[2].indexOf("#"));
+    Base_Topic += "/";
+
+    byte Selected_Dimmer = Topic.substring(MQTT_Subscribe_Topic[2].length() - 1, MQTT_Subscribe_Topic[2].length()).toInt();
 
     // Ignore all requests thats larger then Dimmer_Number_Of
     if (Selected_Dimmer > Dimmer_Number_Of);
 
     // State request
     else if (Payload.indexOf("-?") != -1) {
-      MQTT_Client.publish(String(MQTT_Subscribe_Topic[2]).c_str(), 0, false, String("S-" + String(Selected_Dimmer) + "-" + String(Dimmer_State[Selected_Dimmer - 1])).c_str());
+      MQTT_Client.publish(String(Base_Topic + String(Selected_Dimmer)).c_str(), 0, false, String("S-" + String(Dimmer_State[Selected_Dimmer - 1])).c_str());
     }
 
+    // Ignore own status messages bu not reacting to "S-" posts
     else if (Payload.indexOf("S-") == -1) {
-      int State_Target = Payload.substring(Payload.indexOf("-") + 1, Payload.length()).toInt();
+      int State_Target = Payload.toInt();
 
       if (Selected_Dimmer <= Dimmer_Number_Of && Dimmer_State[Selected_Dimmer - 1] != State_Target) {
         Dimmer_Fade(Selected_Dimmer, State_Target);
